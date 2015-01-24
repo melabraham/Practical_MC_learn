@@ -1,0 +1,120 @@
+---
+title: "Practical Machine Learning Project: Analysis to predict the manner in which exercise was done"
+author: "melabraham"
+date: "Sunday, January 18, 2015"
+output: pdf_document
+---
+
+## Executive Summary 
+
+Given the test and training data from the source http://groupware.les.inf.puc-rio.br/har, the outcome of this project is to process the data gathered from accelerometers on the belt, forearm, arm, and dumbell of the participants in a machine learning algorithm and do a detailed analysis to predict the manner in which the participants did the exercise.  
+ 
+The prediction model is run on the test data to predict the outcome of 20 different test cases.
+ 
+
+### Reproducability 
+
+Step1 : Load the libraries 
+``` {r loadlibrary}
+library(AppliedPredictiveModeling)
+library(caret)
+library(rattle)
+library(randomForest)
+library(e1071)
+
+```
+
+
+### Load and Clean data
+
+Step2 : Import the data and verify that the training data and the test data are identical. Select the columns for analysis
+``` {r loaddata}
+
+# convert blank,NA and #DIV/0 to NA . Remove columns containing 'NA' from the downloaded datasets
+df_training <- read.csv("pml-training.csv", na.strings=c("NA","","#DIV/0!"), header=TRUE)
+colnames_train <- colnames(df_training)
+
+df_testing <- read.csv("pml-training.csv", na.strings=c("NA","","#DIV/0!"), header=TRUE)
+colnames_test <- colnames(df_testing)
+
+## Eliminate other extraneous columns that are not needed
+
+# Count the number of non-NAs in each col.
+nonNAs <- function(x) {
+    as.vector(apply(x, 2, function(x) length(which(!is.na(x)))))
+}
+
+# Build vector of missing data or NA columns to drop.
+colcnts <- nonNAs(df_training)
+drops <- c()
+for (cnt in 1:length(colcnts)) {
+    if (colcnts[cnt] < nrow(df_training)) {
+        drops <- c(drops, colnames_train[cnt])
+    }
+}
+
+# Drop NA data and the first 7 columns as they're unnecessary for predicting.
+df_training <- df_training[,!(names(df_training) %in% drops)]
+df_training <- df_training[,8:length(colnames(df_training))]
+
+df_testing <- df_testing[,!(names(df_testing) %in% drops)]
+df_testing <- df_testing[,8:length(colnames(df_testing))]
+
+# Show remaining columns.
+colnames(df_training)
+
+colnames(df_testing)
+
+```
+### Split training data set into 80/20 subsamples 
+``` {r datasubset}
+# seed random # gen for subsetting
+set.seed(625)
+
+inTrain <- createDataPartition(y = df_training$classe, p = 0.8, list = F)
+trainingSub <- df_training[inTrain, ]
+testingSub <- df_training[-inTrain, ]
+
+dim(trainingSub)
+dim(testingSub)
+
+```
+### Using ML algorithms for prediction : Random Forests
+### Random Forests were used as there are 52 input variables and they are well suited to handle a large number of inputs, especially when the interactions between variables are unknown. Also, it has a built in cross-validation component that gives an unbiased estimate of the forest???s out-of-sample (OOB) error rate
+
+
+``` {r predict}
+
+modFitA1 <- randomForest(classe ~. , data=trainingSub)
+
+# predicting in-sample error
+predict_test <- predict(modFitA1, testingSub, type = "class")
+
+# using confusion matrix to test results
+confusionMatrix(predict_test, testingSub$classe)
+
+```
+# random forests yielded good results.
+
+## Out of sample error
+### The out of sample error after running the predict() function on the test set :  1 - 0.996 = 0.014
+
+
+# Generating files for submission
+``` {r generatefiles}
+ # Using the provided Test set out-of-sample error
+predictionsB2 <- as.character(predict(modFitA1, testingSub))
+
+
+ # Function to generate files with prediction to submit for assignment
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictionsB2)
+```
